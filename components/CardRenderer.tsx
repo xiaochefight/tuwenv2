@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CardContent, CardStyle, ContentSection, UserInfo } from '../types';
 import { Quote, Check, Clock, Hash, Share2, MoreHorizontal, Bookmark, List, Feather, Layers, Star, ArrowRight, Grip } from 'lucide-react';
@@ -11,7 +10,49 @@ interface CardRendererProps {
   footerNote?: string;
   fixedAspectRatioClass?: string;
   userInfo?: UserInfo;
+  isEditable?: boolean;
+  onContentChange?: (newContent: CardContent) => void;
 }
+
+// Editable Wrapper Component
+const Editable = ({ 
+  value, 
+  onUpdate, 
+  isEditable, 
+  className, 
+  as: Component = 'span',
+  children
+}: { 
+  value?: string, 
+  onUpdate: (val: string) => void, 
+  isEditable?: boolean, 
+  className?: string, 
+  as?: any,
+  children?: React.ReactNode 
+}) => {
+  if (!isEditable) {
+    return <Component className={className}>{children || value}</Component>;
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newValue = window.prompt("编辑内容:", value);
+    if (newValue !== null && newValue !== value) {
+      onUpdate(newValue);
+    }
+  };
+
+  return (
+    <Component 
+      className={`${className} cursor-text hover:bg-yellow-200/50 hover:outline hover:outline-2 hover:outline-yellow-400/50 hover:rounded transition-all relative`}
+      onClick={handleClick}
+      title="点击编辑内容"
+    >
+      {children || value}
+    </Component>
+  );
+};
 
 const CardRenderer: React.FC<CardRendererProps> = ({ 
   content, 
@@ -20,7 +61,9 @@ const CardRenderer: React.FC<CardRendererProps> = ({
   sectionIndex = 0,
   footerNote,
   fixedAspectRatioClass,
-  userInfo
+  userInfo,
+  isEditable,
+  onContentChange
 }) => {
   
   const isHighRes = !!fixedAspectRatioClass; // Assume export mode if fixed aspect ratio is present
@@ -49,6 +92,29 @@ const CardRenderer: React.FC<CardRendererProps> = ({
         {footerNote}
       </div>
     );
+  };
+
+  // --- Helper to update specific fields ---
+  const updateContent = (field: keyof CardContent, value: any) => {
+    if (onContentChange) {
+      onContentChange({ ...content, [field]: value });
+    }
+  };
+
+  const updateKeyPoint = (index: number, value: string) => {
+    if (onContentChange) {
+      const newPoints = [...content.keyPoints];
+      newPoints[index] = value;
+      onContentChange({ ...content, keyPoints: newPoints });
+    }
+  };
+
+  const updateSection = (index: number, field: keyof ContentSection, value: string) => {
+    if (onContentChange) {
+      const newSections = [...content.sections];
+      newSections[index] = { ...newSections[index], [field]: value };
+      onContentChange({ ...content, sections: newSections });
+    }
   };
 
   // --- User Info Rendering (HTML/Tailwind) ---
@@ -131,7 +197,7 @@ const CardRenderer: React.FC<CardRendererProps> = ({
        {content.keyPoints.map((point, i) => (
          <div key={i} className={itemClass}>
             {icon}
-            <span>{point}</span>
+            <Editable value={point} onUpdate={(val) => updateKeyPoint(i, val)} isEditable={isEditable} />
          </div>
        ))}
     </div>
@@ -139,8 +205,8 @@ const CardRenderer: React.FC<CardRendererProps> = ({
 
   const renderSectionContent = (section: ContentSection, idx: number, titleClass: string, textClass: string, containerClass: string = "mb-6") => (
     <div key={idx} className={containerClass}>
-       <h4 className={titleClass}>{section.title}</h4>
-       <p className={textClass}>{section.content}</p>
+       <Editable as="h4" className={titleClass} value={section.title} onUpdate={(val) => updateSection(idx, 'title', val)} isEditable={isEditable} />
+       <Editable as="p" className={textClass} value={section.content} onUpdate={(val) => updateSection(idx, 'content', val)} isEditable={isEditable} />
     </div>
   );
 
@@ -161,12 +227,22 @@ const CardRenderer: React.FC<CardRendererProps> = ({
           <div className="relative z-10 flex flex-col flex-grow">
             {/* Header Area */}
             <div className={`flex items-center justify-between ${s('mb-6', 'mb-12')}`}>
-              <span className={`${s('text-[10px]', 'text-2xl')} font-bold tracking-[0.2em] uppercase text-gray-400 border-b border-gray-200 pb-2`}>
-                {showSingleSection ? content.title : content.category}
-              </span>
+              <Editable 
+                as="span" 
+                className={`${s('text-[10px]', 'text-2xl')} font-bold tracking-[0.2em] uppercase text-gray-400 border-b border-gray-200 pb-2`}
+                value={showSingleSection ? content.title : content.category}
+                onUpdate={(val) => updateContent(showSingleSection ? 'title' : 'category', val)}
+                isEditable={isEditable}
+              />
               <div className={`flex items-center gap-2 text-gray-400`}>
                 <Clock size={isHighRes ? 24 : 12} />
-                <span className={s('text-[10px]', 'text-xl')}>{content.readingTime}</span>
+                <Editable 
+                  as="span" 
+                  className={s('text-[10px]', 'text-xl')} 
+                  value={content.readingTime} 
+                  onUpdate={(val) => updateContent('readingTime', val)} 
+                  isEditable={isEditable} 
+                />
               </div>
             </div>
             
@@ -176,11 +252,21 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               {/* Cover Mode */}
               {showCoverElements && (
                 <>
-                  <h3 className={`${s('text-3xl', 'text-6xl')} font-serif font-medium text-gray-900 leading-tight`}>{content.title}</h3>
+                  <Editable 
+                    as="h3" 
+                    className={`${s('text-3xl', 'text-6xl')} font-serif font-medium text-gray-900 leading-tight`} 
+                    value={content.title} 
+                    onUpdate={(val) => updateContent('title', val)} 
+                    isEditable={isEditable} 
+                  />
                   <div className="flex-1 flex flex-col justify-center">
-                     <p className={`text-gray-600 leading-relaxed font-sans text-justify border-l-4 border-gray-900 pl-6 py-2 my-6 ${s('text-xl', 'text-2xl')}`}>
-                       {content.summary}
-                     </p>
+                     <Editable 
+                       as="p" 
+                       className={`text-gray-600 leading-relaxed font-sans text-justify border-l-4 border-gray-900 pl-6 py-2 my-6 ${s('text-xl', 'text-2xl')}`}
+                       value={content.summary}
+                       onUpdate={(val) => updateContent('summary', val)}
+                       isEditable={isEditable}
+                     />
                   </div>
                   
                   {content.keyPoints.length > 0 && (
@@ -203,15 +289,23 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                     </span>
                     
                     <div className={`${s('mb-8 mt-6', 'mb-12 mt-4')}`}>
-                      <h2 className={`${s('text-3xl', 'text-5xl')} font-serif font-medium text-gray-900 mb-8 leading-tight`}>
-                        {currentSection.title}
-                      </h2>
+                      <Editable 
+                        as="h2" 
+                        className={`${s('text-3xl', 'text-5xl')} font-serif font-medium text-gray-900 mb-8 leading-tight`}
+                        value={currentSection.title}
+                        onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                        isEditable={isEditable}
+                      />
                       <div className="w-24 h-2 bg-gray-900 mb-8"></div>
                     </div>
                     
-                    <div className={`${s('text-lg', 'text-3xl')} text-gray-700 leading-[1.8] text-justify font-sans tracking-wide`}>
-                       {currentSection.content}
-                    </div>
+                    <Editable 
+                      as="div"
+                      className={`${s('text-lg', 'text-3xl')} text-gray-700 leading-[1.8] text-justify font-sans tracking-wide`}
+                      value={currentSection.content}
+                      onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                      isEditable={isEditable}
+                    />
 
                     <div className="mt-auto pt-12 flex justify-center">
                        <span className="text-gray-300 text-3xl">• • •</span>
@@ -226,7 +320,13 @@ const CardRenderer: React.FC<CardRendererProps> = ({
             </div>
 
             <div className={`mt-8 pt-6 border-t border-gray-100 flex justify-between items-center relative ${s('text-xs', 'text-xl')}`}>
-              <div className="font-bold text-gray-900">{content.authorOrSource}</div>
+              <Editable 
+                 as="div" 
+                 className="font-bold text-gray-900" 
+                 value={content.authorOrSource} 
+                 onUpdate={(val) => updateContent('authorOrSource', val)} 
+                 isEditable={isEditable} 
+              />
               <div className={`${s('text-2xl', 'text-5xl')} grayscale opacity-80`}>{content.emoji}</div>
               {renderPagination()}
             </div>
@@ -248,9 +348,13 @@ const CardRenderer: React.FC<CardRendererProps> = ({
             <div className="flex-1 flex flex-col">
               {/* Header */}
               <div className={`flex justify-between items-start ${s('mb-6', 'mb-12')}`}>
-                <span className={`px-4 py-1.5 bg-white/20 rounded-lg ${s('text-[10px]', 'text-xl')} font-bold uppercase tracking-wider backdrop-blur-md border border-white/10 shadow-sm`}>
-                  {showSingleSection ? content.title.substring(0, 10) + (content.title.length > 10 ? '...' : '') : content.category}
-                </span>
+                <Editable 
+                  as="span"
+                  className={`px-4 py-1.5 bg-white/20 rounded-lg ${s('text-[10px]', 'text-xl')} font-bold uppercase tracking-wider backdrop-blur-md border border-white/10 shadow-sm`}
+                  value={showSingleSection ? content.title.substring(0, 10) + (content.title.length > 10 ? '...' : '') : content.category}
+                  onUpdate={(val) => updateContent(showSingleSection ? 'title' : 'category', val)}
+                  isEditable={isEditable}
+                />
                 <span className={`${s('text-4xl', 'text-7xl')} drop-shadow-lg filter grayscale-[0.2]`}>{content.emoji}</span>
               </div>
               
@@ -258,9 +362,21 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               {showCoverElements && (
                 <>
                    <div className="flex-1 flex flex-col justify-center">
-                     <h3 className={`${s('text-2xl', 'text-6xl')} font-bold mb-10 leading-tight drop-shadow-md`}>{content.title}</h3>
+                     <Editable 
+                       as="h3" 
+                       className={`${s('text-2xl', 'text-6xl')} font-bold mb-10 leading-tight drop-shadow-md`}
+                       value={content.title}
+                       onUpdate={(val) => updateContent('title', val)}
+                       isEditable={isEditable}
+                     />
                      <div className={`bg-white/10 rounded-3xl ${s('p-5', 'p-10')} backdrop-blur-sm mb-8 border border-white/5 shadow-inner`}>
-                       <p className={`text-white/95 ${s('text-sm', 'text-2xl')} font-medium leading-relaxed text-justify tracking-wide`}>{content.summary}</p>
+                       <Editable 
+                         as="p" 
+                         className={`text-white/95 ${s('text-sm', 'text-2xl')} font-medium leading-relaxed text-justify tracking-wide`}
+                         value={content.summary}
+                         onUpdate={(val) => updateContent('summary', val)}
+                         isEditable={isEditable}
+                       />
                      </div>
                    </div>
                    
@@ -289,16 +405,24 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                              <span className={`flex items-center justify-center ${s('w-8 h-8', 'w-16 h-16')} rounded-full bg-white/20 text-white font-bold ${s('text-sm', 'text-2xl')}`}>
                                 {sectionIndex + 1}
                              </span>
-                             <h2 className={`${s('text-2xl', 'text-4xl')} font-bold text-white leading-tight`}>
-                               {currentSection.title}
-                             </h2>
+                             <Editable 
+                               as="h2" 
+                               className={`${s('text-2xl', 'text-4xl')} font-bold text-white leading-tight`}
+                               value={currentSection.title}
+                               onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                               isEditable={isEditable}
+                             />
                           </div>
                           
                           <div className={`w-full h-px bg-gradient-to-r from-white/50 to-transparent mb-8`}></div>
 
-                          <p className={`${s('text-lg', 'text-3xl')} text-white/95 leading-[1.8] font-medium text-justify tracking-wide drop-shadow-sm`}>
-                             {currentSection.content}
-                          </p>
+                          <Editable 
+                            as="p" 
+                            className={`${s('text-lg', 'text-3xl')} text-white/95 leading-[1.8] font-medium text-justify tracking-wide drop-shadow-sm`}
+                            value={currentSection.content}
+                            onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                            isEditable={isEditable}
+                          />
                        </div>
                    </div>
                 </div>
@@ -316,8 +440,8 @@ const CardRenderer: React.FC<CardRendererProps> = ({
 
             {/* Footer */}
             <div className={`mt-12 pt-6 border-t border-white/10 flex justify-between items-center ${s('text-[10px]', 'text-xl')} font-medium opacity-80 relative z-20`}>
-               <span>{content.authorOrSource}</span>
-               <span>{content.readingTime}</span>
+               <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
+               <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} />
                {renderPagination("text-white/90 font-bold bg-white/20")}
             </div>
           </div>
@@ -342,9 +466,13 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                  <span className="w-3 h-3 bg-pink-500 animate-pulse shadow-[0_0_10px_#ec4899]"></span>
                  <span className={`text-cyan-400 ${s('text-[10px]', 'text-xl')} tracking-widest uppercase`}>System_Ready</span>
                </div>
-               <span className={`text-pink-500 ${s('text-[10px]', 'text-xl')} font-bold bg-pink-500/10 px-4 py-1 rounded`}>
-                 {showSingleSection ? `NODE_0${sectionIndex + 1}` : content.category}
-               </span>
+               <Editable 
+                 as="span"
+                 className={`text-pink-500 ${s('text-[10px]', 'text-xl')} font-bold bg-pink-500/10 px-4 py-1 rounded`}
+                 value={showSingleSection ? `NODE_0${sectionIndex + 1}` : content.category}
+                 onUpdate={(val) => updateContent(showSingleSection ? 'title' : 'category', val)}
+                 isEditable={isEditable}
+               />
              </div>
 
              {showCoverElements && (
@@ -352,14 +480,18 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                  <div className="flex-1 flex flex-col justify-center">
                    <h3 className={`${s('text-xl', 'text-6xl')} text-white font-bold mb-10 uppercase tracking-wide leading-tight drop-shadow-[0_0_5px_rgba(6,182,212,0.8)]`}>
                      <span className="text-cyan-300 mr-4">_&gt;</span>
-                     {content.title}
+                     <Editable value={content.title} onUpdate={(val) => updateContent('title', val)} isEditable={isEditable} />
                    </h3>
                    <div className="relative mb-12 group">
                      <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-pink-500 rounded opacity-30 group-hover:opacity-50 transition duration-500 blur-sm"></div>
                      <div className={`relative bg-gray-900/95 ${s('p-5', 'p-10')} border border-cyan-500/50`}>
-                       <p className={`text-cyan-50 ${s('text-xs', 'text-2xl')} leading-relaxed text-justify font-light tracking-wide`}>
-                         {content.summary}
-                       </p>
+                       <Editable 
+                         as="p"
+                         className={`text-cyan-50 ${s('text-xs', 'text-2xl')} leading-relaxed text-justify font-light tracking-wide`}
+                         value={content.summary}
+                         onUpdate={(val) => updateContent('summary', val)}
+                         isEditable={isEditable}
+                       />
                      </div>
                    </div>
                  </div>
@@ -385,12 +517,22 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                    
                    <div className="mb-10 z-10">
                       <span className={`text-pink-500 ${s('text-xs', 'text-2xl')} uppercase tracking-[0.3em] mb-4 block animate-pulse`}>Initializing_Section...</span>
-                      <h2 className={`${s('text-3xl', 'text-5xl')} text-cyan-400 font-bold uppercase border-b-2 border-dashed border-cyan-500/50 pb-6 inline-block`}>{currentSection.title}</h2>
+                      <Editable 
+                        as="h2"
+                        className={`${s('text-3xl', 'text-5xl')} text-cyan-400 font-bold uppercase border-b-2 border-dashed border-cyan-500/50 pb-6 inline-block`}
+                        value={currentSection.title}
+                        onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                        isEditable={isEditable}
+                      />
                    </div>
                    
-                   <div className={`text-gray-200 ${s('text-lg', 'text-3xl')} leading-[1.8] font-light border-l-4 border-pink-500/50 pl-8 py-6 bg-gradient-to-r from-cyan-900/20 to-transparent z-10`}>
-                      {currentSection.content}
-                   </div>
+                   <Editable 
+                     as="div"
+                     className={`text-gray-200 ${s('text-lg', 'text-3xl')} leading-[1.8] font-light border-l-4 border-pink-500/50 pl-8 py-6 bg-gradient-to-r from-cyan-900/20 to-transparent z-10`}
+                     value={currentSection.content}
+                     onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                     isEditable={isEditable}
+                   />
                    
                    <div className="mt-12 flex gap-2 opacity-30">
                       {[...Array(5)].map((_,i) => <div key={i} className="h-2 w-8 bg-cyan-500"></div>)}
@@ -407,8 +549,12 @@ const CardRenderer: React.FC<CardRendererProps> = ({
              )}
 
              <div className={`mt-auto pt-8 flex justify-between items-center ${s('text-[9px]', 'text-lg')} text-gray-500 font-mono uppercase relative`}>
-                <span className="flex items-center gap-2"><span className="text-pink-500">SRC:</span> {content.authorOrSource}</span>
-                <span className="bg-cyan-950/50 px-3 py-1 border border-cyan-900 rounded text-cyan-400">{content.readingTime}</span>
+                <span className="flex items-center gap-2"><span className="text-pink-500">SRC:</span> 
+                  <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
+                </span>
+                <span className="bg-cyan-950/50 px-3 py-1 border border-cyan-900 rounded text-cyan-400">
+                  <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} />
+                </span>
                 {renderPagination("text-cyan-500 bg-cyan-950 border border-cyan-500")}
              </div>
            </div>
@@ -423,21 +569,35 @@ const CardRenderer: React.FC<CardRendererProps> = ({
           
           <div className="relative z-10 flex flex-col flex-grow">
             <div className={`flex justify-between items-start ${s('mb-6', 'mb-12')}`}>
-               <div className={`inline-block bg-white border-[4px] border-black px-4 py-2 font-black ${s('text-xs', 'text-2xl')} uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]`}>
-                  {showSingleSection ? `PART ${sectionIndex + 1}` : content.category}
-               </div>
+               <Editable 
+                 as="div"
+                 className={`inline-block bg-white border-[4px] border-black px-4 py-2 font-black ${s('text-xs', 'text-2xl')} uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]`}
+                 value={showSingleSection ? `PART ${sectionIndex + 1}` : content.category}
+                 onUpdate={(val) => updateContent(showSingleSection ? 'title' : 'category', val)}
+                 isEditable={isEditable}
+               />
                <div className={`${s('text-4xl', 'text-8xl')} filter drop-shadow-[4px_4px_0px_rgba(0,0,0,1)] transform hover:rotate-12 transition-transform duration-300`}>{content.emoji}</div>
             </div>
             
             {showCoverElements && (
               <>
                  <div className="flex-1 flex flex-col justify-center">
-                   <h3 className={`${s('text-2xl', 'text-5xl')} font-black text-black mb-8 uppercase leading-none tracking-tight bg-white inline-block ${s('px-3 py-2', 'px-8 py-6')} border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transform -rotate-1`}>
-                     {content.title}
-                   </h3>
+                   <Editable 
+                     as="h3"
+                     className={`${s('text-2xl', 'text-5xl')} font-black text-black mb-8 uppercase leading-none tracking-tight bg-white inline-block ${s('px-3 py-2', 'px-8 py-6')} border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transform -rotate-1`}
+                     value={content.title}
+                     onUpdate={(val) => updateContent('title', val)}
+                     isEditable={isEditable}
+                   />
                    <div className={`bg-white border-[4px] border-black ${s('p-5', 'p-10')} mb-12 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative`}>
                      <div className="absolute -top-4 -left-4 w-8 h-8 bg-black rounded-full border-[4px] border-white"></div>
-                     <p className={`font-bold ${s('text-xs', 'text-2xl')} leading-relaxed text-justify mt-2`}>{content.summary}</p>
+                     <Editable 
+                       as="p"
+                       className={`font-bold ${s('text-xs', 'text-2xl')} leading-relaxed text-justify mt-2`}
+                       value={content.summary}
+                       onUpdate={(val) => updateContent('summary', val)}
+                       isEditable={isEditable}
+                     />
                    </div>
                  </div>
                  
@@ -459,10 +619,20 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                        #{sectionIndex + 1}
                      </div>
                      
-                     <h2 className={`${s('text-3xl', 'text-6xl')} font-black bg-[#FEFF9C] inline-block px-6 py-2 border-[3px] border-black mb-10 transform -rotate-2`}>{currentSection.title}</h2>
-                     <p className={`font-bold ${s('text-lg', 'text-3xl')} leading-[1.6] text-justify`}>
-                        {currentSection.content}
-                     </p>
+                     <Editable 
+                       as="h2"
+                       className={`${s('text-3xl', 'text-6xl')} font-black bg-[#FEFF9C] inline-block px-6 py-2 border-[3px] border-black mb-10 transform -rotate-2`}
+                       value={currentSection.title}
+                       onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                       isEditable={isEditable}
+                     />
+                     <Editable 
+                       as="p"
+                       className={`font-bold ${s('text-lg', 'text-3xl')} leading-[1.6] text-justify`}
+                       value={currentSection.content}
+                       onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                       isEditable={isEditable}
+                     />
                   </div>
                </div>
             )}
@@ -471,16 +641,28 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               <div className="space-y-6 mt-6">
                  {content.sections.map((section, i) => (
                    <div key={i} className="bg-white border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                      <h4 className="font-black text-lg mb-2 bg-black text-white inline-block px-2">{section.title}</h4>
-                      <p className="text-xs font-bold leading-relaxed">{section.content}</p>
+                      <Editable as="h4" className="font-black text-lg mb-2 bg-black text-white inline-block px-2" value={section.title} onUpdate={(val) => updateSection(i, 'title', val)} isEditable={isEditable} />
+                      <Editable as="p" className="text-xs font-bold leading-relaxed" value={section.content} onUpdate={(val) => updateSection(i, 'content', val)} isEditable={isEditable} />
                    </div>
                  ))}
               </div>
             )}
             
             <div className={`mt-auto flex justify-between items-end font-black ${s('text-[10px]', 'text-xl')} uppercase relative pt-8`}>
-              <span className="bg-black text-white px-4 py-2 transform -skew-x-12">{content.authorOrSource}</span>
-              <span className="underline decoration-4 underline-offset-4">{content.readingTime}</span>
+              <Editable 
+                 as="span" 
+                 className="bg-black text-white px-4 py-2 transform -skew-x-12"
+                 value={content.authorOrSource}
+                 onUpdate={(val) => updateContent('authorOrSource', val)}
+                 isEditable={isEditable}
+              />
+              <Editable 
+                 as="span" 
+                 className="underline decoration-4 underline-offset-4"
+                 value={content.readingTime}
+                 onUpdate={(val) => updateContent('readingTime', val)}
+                 isEditable={isEditable}
+              />
               {renderPagination("text-black font-black bg-white border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]")}
             </div>
           </div>
@@ -497,23 +679,35 @@ const CardRenderer: React.FC<CardRendererProps> = ({
           
           <div className="relative z-10 flex flex-col flex-grow">
             <div className="text-center mb-12 pt-4">
-               <span className={`text-[#C5A059] ${s('text-[9px]', 'text-lg')} uppercase tracking-[0.4em] font-serif border-b border-[#C5A059]/30 pb-4 inline-block`}>
-                 {showSingleSection ? `Chapter ${sectionIndex + 1}` : content.category}
-               </span>
+               <Editable 
+                 as="span"
+                 className={`text-[#C5A059] ${s('text-[9px]', 'text-lg')} uppercase tracking-[0.4em] font-serif border-b border-[#C5A059]/30 pb-4 inline-block`}
+                 value={showSingleSection ? `Chapter ${sectionIndex + 1}` : content.category}
+                 onUpdate={(val) => updateContent(showSingleSection ? 'title' : 'category', val)}
+                 isEditable={isEditable}
+               />
             </div>
 
             {showCoverElements && (
               <>
                 <div className="flex-1 flex flex-col justify-center">
-                  <h3 className={`${s('text-2xl', 'text-6xl')} font-serif text-center text-white mb-8 italic leading-tight px-4`}>
-                    {content.title}
-                  </h3>
+                  <Editable 
+                    as="h3"
+                    className={`${s('text-2xl', 'text-6xl')} font-serif text-center text-white mb-8 italic leading-tight px-4`}
+                    value={content.title}
+                    onUpdate={(val) => updateContent('title', val)}
+                    isEditable={isEditable}
+                  />
                   <div className="flex justify-center mb-10">
                      <div className="w-32 h-[2px] bg-gradient-to-r from-transparent via-[#C5A059] to-transparent"></div>
                   </div>
-                  <p className={`text-center text-[#e0e0e0] ${s('text-xs', 'text-2xl')} font-light leading-loose text-justify tracking-wide mb-12 px-4`}>
-                    {content.summary}
-                  </p>
+                  <Editable 
+                    as="p"
+                    className={`text-center text-[#e0e0e0] ${s('text-xs', 'text-2xl')} font-light leading-loose text-justify tracking-wide mb-12 px-4`}
+                    value={content.summary}
+                    onUpdate={(val) => updateContent('summary', val)}
+                    isEditable={isEditable}
+                  />
                 </div>
                 
                 {content.keyPoints.length > 0 && (
@@ -533,10 +727,20 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                   <div className="w-12 h-12 border border-[#C5A059] rotate-45 mb-12 flex items-center justify-center mt-10">
                      <span className="text-[#C5A059] text-xl -rotate-45 font-serif italic">{sectionIndex + 1}</span>
                   </div>
-                  <h2 className={`${s('text-3xl', 'text-5xl')} font-serif text-[#C5A059] mb-12 text-center italic max-w-3xl leading-tight`}>{currentSection.title}</h2>
-                  <p className={`${s('text-lg', 'text-3xl')} text-[#e0e0e0] leading-[1.9] font-light text-justify font-serif tracking-wide drop-shadow-md`}>
-                     {currentSection.content}
-                  </p>
+                  <Editable 
+                    as="h2"
+                    className={`${s('text-3xl', 'text-5xl')} font-serif text-[#C5A059] mb-12 text-center italic max-w-3xl leading-tight`}
+                    value={currentSection.title}
+                    onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                    isEditable={isEditable}
+                  />
+                  <Editable 
+                    as="p"
+                    className={`${s('text-lg', 'text-3xl')} text-[#e0e0e0] leading-[1.9] font-light text-justify font-serif tracking-wide drop-shadow-md`}
+                    value={currentSection.content}
+                    onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                    isEditable={isEditable}
+                  />
                   <div className="mt-12 w-full flex justify-center">
                      <div className="w-1/3 h-px bg-gradient-to-r from-transparent via-[#C5A059]/50 to-transparent"></div>
                   </div>
@@ -547,16 +751,26 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                <div className="mt-8 space-y-8 px-2">
                  {content.sections.map((section, i) => (
                     <div key={i} className="text-center">
-                       <h4 className="text-[#C5A059] font-serif text-lg mb-3 italic">— {section.title} —</h4>
-                       <p className="text-xs text-[#cccccc] font-serif tracking-wide leading-relaxed text-justify">{section.content}</p>
+                       <h4 className="text-[#C5A059] font-serif text-lg mb-3 italic">
+                         — <Editable as="span" value={section.title} onUpdate={(val) => updateSection(i, 'title', val)} isEditable={isEditable} /> —
+                       </h4>
+                       <Editable 
+                         as="p"
+                         className="text-xs text-[#cccccc] font-serif tracking-wide leading-relaxed text-justify"
+                         value={section.content}
+                         onUpdate={(val) => updateSection(i, 'content', val)}
+                         isEditable={isEditable}
+                       />
                     </div>
                  ))}
                </div>
             )}
 
             <div className={`mt-auto flex justify-between items-end ${s('text-[9px]', 'text-lg')} text-[#C5A059]/70 font-serif uppercase tracking-widest px-4 pb-2 relative pt-10`}>
-              <span>{content.authorOrSource}</span>
-              <span>{content.readingTime} READ</span>
+              <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
+              <span>
+                <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} /> READ
+              </span>
               {renderPagination("text-[#C5A059]")}
             </div>
           </div>
@@ -575,7 +789,13 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               <div className="flex items-center gap-3 bg-white/60 px-5 py-2 rounded-full shadow-sm backdrop-blur-sm">
                 <span className={`${s('text-lg', 'text-3xl')}`}>{content.emoji}</span>
                 <span className="h-6 w-px bg-gray-300"></span>
-                <span className={`${s('text-[10px]', 'text-lg')} font-bold tracking-wide text-[#5a6e5a] uppercase`}>{content.category}</span>
+                <Editable 
+                  as="span"
+                  className={`${s('text-[10px]', 'text-lg')} font-bold tracking-wide text-[#5a6e5a] uppercase`}
+                  value={content.category}
+                  onUpdate={(val) => updateContent('category', val)}
+                  isEditable={isEditable}
+                />
               </div>
             </div>
 
@@ -583,12 +803,22 @@ const CardRenderer: React.FC<CardRendererProps> = ({
               <>
                  <div className="flex-1 flex flex-col justify-center">
                    {/* Reduced high-res font size from 5xl to 4xl for title to fit better */}
-                   <h3 className={`${s('text-2xl', 'text-4xl')} font-bold text-[#1a2e1a] mb-10 leading-tight font-serif tracking-tight`}>
-                     {content.title}
-                   </h3>
+                   <Editable 
+                     as="h3"
+                     className={`${s('text-2xl', 'text-4xl')} font-bold text-[#1a2e1a] mb-10 leading-tight font-serif tracking-tight`}
+                     value={content.title}
+                     onUpdate={(val) => updateContent('title', val)}
+                     isEditable={isEditable}
+                   />
                    <div className={`bg-white/50 ${s('p-5', 'p-12')} rounded-3xl backdrop-blur-[2px] mb-8 border border-white/60 shadow-sm`}>
                      {/* Reduced high-res font size from 2xl to xl for summary */}
-                     <p className={`text-[#3d4f3d] ${s('text-sm', 'text-xl')} leading-relaxed text-justify font-medium`}>{content.summary}</p>
+                     <Editable 
+                       as="p"
+                       className={`text-[#3d4f3d] ${s('text-sm', 'text-xl')} leading-relaxed text-justify font-medium`}
+                       value={content.summary}
+                       onUpdate={(val) => updateContent('summary', val)}
+                       isEditable={isEditable}
+                     />
                    </div>
                  </div>
                  
@@ -615,12 +845,20 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                         <div className="h-px flex-1 bg-[#6b8e6b]/30"></div>
                      </div>
                      
-                     <h2 className={`${s('text-3xl', 'text-5xl')} font-serif font-bold text-[#2d342d] mb-10`}>
-                        {currentSection.title}
-                     </h2>
-                     <p className={`${s('text-lg', 'text-3xl')} text-[#3d4f3d] leading-[1.8] font-medium text-justify`}>
-                        {currentSection.content}
-                     </p>
+                     <Editable 
+                       as="h2"
+                       className={`${s('text-3xl', 'text-5xl')} font-serif font-bold text-[#2d342d] mb-10`}
+                       value={currentSection.title}
+                       onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                       isEditable={isEditable}
+                     />
+                     <Editable 
+                       as="p"
+                       className={`${s('text-lg', 'text-3xl')} text-[#3d4f3d] leading-[1.8] font-medium text-justify`}
+                       value={currentSection.content}
+                       onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                       isEditable={isEditable}
+                     />
                   </div>
                </div>
             )}
@@ -634,9 +872,9 @@ const CardRenderer: React.FC<CardRendererProps> = ({
             )}
 
              <div className={`mt-auto pt-6 text-center ${s('text-[10px]', 'text-xl')} text-[#7a8e7a] font-medium flex justify-center items-center gap-3 relative`}>
-                <span>{content.authorOrSource}</span>
+                <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
                 <span className="w-1.5 h-1.5 rounded-full bg-[#7a8e7a]"></span>
-                <span>{content.readingTime}</span>
+                <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} />
                 {renderPagination("text-[#7a8e7a]")}
              </div>
           </div>
@@ -653,9 +891,13 @@ const CardRenderer: React.FC<CardRendererProps> = ({
 
           <div className={`relative z-10 bg-white/10 backdrop-blur-2xl border border-white/20 m-4 ${s('p-6', 'p-12')} rounded-[2rem] flex flex-col shadow-2xl flex-grow`}>
              <div className={`flex justify-between items-center ${s('mb-6', 'mb-12')}`}>
-               <span className={`text-white ${s('text-[9px]', 'text-lg')} font-bold px-4 py-1.5 bg-white/10 rounded-full uppercase tracking-widest border border-white/10 shadow-inner`}>
-                 {content.category}
-               </span>
+               <Editable 
+                 as="span"
+                 className={`text-white ${s('text-[9px]', 'text-lg')} font-bold px-4 py-1.5 bg-white/10 rounded-full uppercase tracking-widest border border-white/10 shadow-inner`}
+                 value={content.category}
+                 onUpdate={(val) => updateContent('category', val)}
+                 isEditable={isEditable}
+               />
                <div className="bg-white/20 p-2 rounded-full backdrop-blur-md shadow-sm">
                  <Share2 size={isHighRes ? 20 : 14} className="text-white" />
                </div>
@@ -665,10 +907,22 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                <>
                   <div className="flex-1 flex flex-col justify-center">
                     {/* Reduced high-res font size from 5xl to 4xl */}
-                    <h3 className={`text-white font-bold ${s('text-2xl', 'text-4xl')} mb-10 drop-shadow-md leading-tight tracking-tight`}>{content.title}</h3>
+                    <Editable 
+                      as="h3"
+                      className={`text-white font-bold ${s('text-2xl', 'text-4xl')} mb-10 drop-shadow-md leading-tight tracking-tight`}
+                      value={content.title}
+                      onUpdate={(val) => updateContent('title', val)}
+                      isEditable={isEditable}
+                    />
                     <div className={`bg-gradient-to-b from-white/10 to-white/5 rounded-2xl ${s('p-6', 'p-12')} mb-8 border border-white/10 shadow-inner`}>
                        {/* Reduced high-res font size from 2xl to xl */}
-                       <p className={`text-white ${s('text-xs', 'text-xl')} font-medium leading-relaxed text-justify`}>{content.summary}</p>
+                       <Editable 
+                         as="p"
+                         className={`text-white ${s('text-xs', 'text-xl')} font-medium leading-relaxed text-justify`}
+                         value={content.summary}
+                         onUpdate={(val) => updateContent('summary', val)}
+                         isEditable={isEditable}
+                       />
                     </div>
                   </div>
                   
@@ -692,10 +946,20 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                    </div>
 
                    <div className={`bg-white/10 ${s('p-8', 'p-14')} rounded-[2.5rem] border border-white/20 shadow-inner relative z-10`}>
-                      <h2 className={`${s('text-3xl', 'text-5xl')} text-white font-bold mb-10 drop-shadow-md`}>{currentSection.title}</h2>
-                      <p className={`${s('text-lg', 'text-3xl')} text-white/90 leading-[1.8] font-medium text-justify tracking-wide`}>
-                         {currentSection.content}
-                      </p>
+                      <Editable 
+                        as="h2"
+                        className={`${s('text-3xl', 'text-5xl')} text-white font-bold mb-10 drop-shadow-md`}
+                        value={currentSection.title}
+                        onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                        isEditable={isEditable}
+                      />
+                      <Editable 
+                        as="p"
+                        className={`${s('text-lg', 'text-3xl')} text-white/90 leading-[1.8] font-medium text-justify tracking-wide`}
+                        value={currentSection.content}
+                        onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                        isEditable={isEditable}
+                      />
                    </div>
                 </div>
              )}
@@ -710,9 +974,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
 
              <div className={`mt-auto pt-8 border-t border-white/10 relative`}>
                <div className={`flex items-center justify-between text-white/70 ${s('text-[9px]', 'text-lg')} font-medium uppercase tracking-wide`}>
-                 <span className="flex items-center gap-2"><Clock size={isHighRes ? 20 : 12} /> {content.readingTime}</span>
+                 <span className="flex items-center gap-2"><Clock size={isHighRes ? 20 : 12} /> 
+                    <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} />
+                 </span>
                  {renderPagination("text-white/80")}
-                 <span>{content.authorOrSource}</span>
+                 <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
                </div>
              </div>
           </div>
@@ -739,11 +1005,21 @@ const CardRenderer: React.FC<CardRendererProps> = ({
             {showCoverElements && (
               <>
                  <div className="flex-1 flex flex-col justify-center">
-                   <h3 className={`${s('text-3xl', 'text-6xl')} font-black text-[#1a1a1a] mb-6 leading-none text-center uppercase tracking-tighter`}>{content.title}</h3>
+                   <Editable 
+                     as="h3"
+                     className={`${s('text-3xl', 'text-6xl')} font-black text-[#1a1a1a] mb-6 leading-none text-center uppercase tracking-tighter`}
+                     value={content.title}
+                     onUpdate={(val) => updateContent('title', val)}
+                     isEditable={isEditable}
+                   />
                    <div className="flex justify-center mb-6"><div className="w-16 h-1 bg-[#2c2c2c]"></div></div>
                    <div className={`columns-1 gap-6 text-justify ${s('text-sm', 'text-xl')} leading-relaxed font-serif border-l-2 border-r-2 border-[#2c2c2c]/20 px-6 py-4 mx-4 mb-8 bg-[#fffbf0]`}>
                       <span className={`${s('text-4xl', 'text-6xl')} float-left mr-2 mt-[-10px] font-black`}>{content.summary.charAt(0)}</span>
-                      {content.summary.substring(1)}
+                      <Editable 
+                         value={content.summary.substring(1)} 
+                         onUpdate={(val) => updateContent('summary', content.summary.charAt(0) + val)} 
+                         isEditable={isEditable} 
+                      />
                    </div>
                  </div>
                  
@@ -763,10 +1039,20 @@ const CardRenderer: React.FC<CardRendererProps> = ({
                         Page {sectionIndex + 1}
                      </div>
                      
-                     <h2 className={`${s('text-3xl', 'text-5xl')} font-black text-center mb-8 border-b-2 border-[#2c2c2c] pb-4`}>{currentSection.title}</h2>
-                     <p className={`${s('text-lg', 'text-3xl')} leading-[1.8] text-justify font-serif`}>
-                        {currentSection.content}
-                     </p>
+                     <Editable 
+                       as="h2"
+                       className={`${s('text-3xl', 'text-5xl')} font-black text-center mb-8 border-b-2 border-[#2c2c2c] pb-4`}
+                       value={currentSection.title}
+                       onUpdate={(val) => updateSection(sectionIndex, 'title', val)}
+                       isEditable={isEditable}
+                     />
+                     <Editable 
+                       as="p"
+                       className={`${s('text-lg', 'text-3xl')} leading-[1.8] text-justify font-serif`}
+                       value={currentSection.content}
+                       onUpdate={(val) => updateSection(sectionIndex, 'content', val)}
+                       isEditable={isEditable}
+                     />
                   </div>
                </div>
             )}
@@ -780,9 +1066,11 @@ const CardRenderer: React.FC<CardRendererProps> = ({
             )}
 
             <div className={`mt-auto pt-6 border-t-4 border-double border-[#2c2c2c] flex justify-between items-center ${s('text-[10px]', 'text-xl')} font-bold uppercase relative`}>
-               <span>{content.authorOrSource}</span>
+               <Editable value={content.authorOrSource} onUpdate={(val) => updateContent('authorOrSource', val)} isEditable={isEditable} />
                {renderPagination("text-[#2c2c2c] bg-[#F0EAD6] border border-[#2c2c2c]")}
-               <span>{content.readingTime} READ</span>
+               <span>
+                  <Editable value={content.readingTime} onUpdate={(val) => updateContent('readingTime', val)} isEditable={isEditable} /> READ
+               </span>
             </div>
           </div>
         </Wrapper>

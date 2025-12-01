@@ -1,13 +1,13 @@
-
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, X, Move, Type, Settings2, GripVertical } from 'lucide-react';
+import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, X, Move, Type, Settings2, GripVertical, Edit3 } from 'lucide-react';
 import { CardContent, CardStyle, UserInfo, UserInfoPosition } from '../types';
 import CardRenderer from './CardRenderer';
 
 interface CardGridProps {
   content: CardContent;
+  onContentChange: (newContent: CardContent) => void;
 }
 
 type Platform = 'XIAOHONGSHU' | 'WECHAT';
@@ -370,12 +370,13 @@ const PositionEditor: React.FC<{
   );
 };
 
-const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName: string; userInfo: UserInfo }> = ({ content, style, styleName, userInfo }) => {
+const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName: string; userInfo: UserInfo; onContentChange: (c: CardContent) => void }> = ({ content, style, styleName, userInfo, onContentChange }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const hiddenExportRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [viewMode, setViewMode] = useState<'total' | 'slides'>('total');
+  const [isEditMode, setIsEditMode] = useState(false);
   
   const [exportState, setExportState] = useState<{ isActive: boolean; platform: Platform; pageConfig: ExportTask['pages'][0] | null; }>({ isActive: false, platform: 'XIAOHONGSHU', pageConfig: null });
 
@@ -523,15 +524,30 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
 
       <div className="flex justify-between items-center px-1">
         <span className="text-xs font-mono text-gray-400 group-hover:text-gray-800 transition-colors">{styleName}</span>
-        <button onClick={() => setViewMode(prev => prev === 'total' ? 'slides' : 'total')} className="text-xs font-medium text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
-           {viewMode === 'total' ? <Eye size={14} /> : <Grid size={14} />} {viewMode === 'total' ? '预览多图' : '预览长图'}
-        </button>
+        <div className="flex gap-2">
+            <button 
+              onClick={() => setIsEditMode(!isEditMode)} 
+              className={`text-xs font-medium flex items-center gap-1 transition-colors ${isEditMode ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded' : 'text-gray-400 hover:text-indigo-600'}`}
+            >
+               <Edit3 size={14} /> {isEditMode ? '完成' : '编辑'}
+            </button>
+            <button onClick={() => setViewMode(prev => prev === 'total' ? 'slides' : 'total')} className="text-xs font-medium text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
+               {viewMode === 'total' ? <Eye size={14} /> : <Grid size={14} />} {viewMode === 'total' ? '预览多图' : '预览长图'}
+            </button>
+        </div>
       </div>
       
-      <div className="relative shadow-sm hover:shadow-md transition-shadow duration-300 rounded-lg bg-white border border-gray-100">
+      <div className={`relative shadow-sm hover:shadow-md transition-all duration-300 rounded-lg bg-white border ${isEditMode ? 'border-indigo-300 ring-2 ring-indigo-500/20' : 'border-gray-100'}`}>
         {viewMode === 'total' ? (
            <div ref={cardRef} className="w-full bg-white overflow-hidden rounded-lg">
-             <CardRenderer content={content} style={style} renderMode="total" userInfo={userInfo} />
+             <CardRenderer 
+               content={content} 
+               style={style} 
+               renderMode="total" 
+               userInfo={userInfo} 
+               isEditable={isEditMode}
+               onContentChange={onContentChange}
+             />
            </div>
         ) : (
            <div className="w-full bg-white rounded-lg p-1">
@@ -581,7 +597,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
   );
 };
 
-const CardGrid: React.FC<CardGridProps> = ({ content }) => {
+const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
   const styles = [
     { id: CardStyle.MINIMALIST, name: "极简白 (Minimalist)" },
     { id: CardStyle.MODERN_GRADIENT, name: "现代渐变 (Gradient)" },
@@ -705,7 +721,7 @@ const CardGrid: React.FC<CardGridProps> = ({ content }) => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
         {styles.map((style) => (
-          <CardWrapper key={style.id} content={content} style={style.id} styleName={style.name} userInfo={userInfo} />
+          <CardWrapper key={style.id} content={content} style={style.id} styleName={style.name} userInfo={userInfo} onContentChange={onContentChange} />
         ))}
       </div>
     </div>
