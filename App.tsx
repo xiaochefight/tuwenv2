@@ -222,7 +222,7 @@ const App: React.FC = () => {
       {/* Results Section */}
       <section ref={resultsRef} className="mt-24 min-h-[500px]">
         {state.hasResult && cardContent && (
-           <CardGrid content={cardContent} onContentChange={setCardContent} />
+           <CardGrid content={cardContent} />
         )}
         
         {!state.hasResult && !state.isLoading && (
