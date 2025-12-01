@@ -31,6 +31,66 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      /* Editable Styles */
+      [data-editable][contenteditable="true"] {
+        outline: 2px solid #4F46E5;
+        padding: 2px;
+        border-radius: 4px;
+        background-color: rgba(79, 70, 229, 0.05);
+        cursor: text;
+        transition: all 0.2s;
+      }
+
+      /* Floating Toolbar */
+      .floating-toolbar {
+        position: absolute;
+        z-index: 1000;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 4px 6px;
+        display: flex;
+        gap: 2px;
+        align-items: center;
+        border: 1px solid #e5e7eb;
+        transform: translateY(-10px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+
+      .floating-toolbar.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .floating-toolbar button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 4px;
+        color: #374151;
+        transition: background-color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+      }
+
+      .floating-toolbar button:hover {
+        background-color: #f3f4f6;
+        color: #4F46E5;
+      }
+
+      .floating-toolbar .separator {
+        width: 1px;
+        height: 16px;
+        background-color: #e5e7eb;
+        margin: 0 4px;
+      }
     </style>
   <script type="importmap">
 {

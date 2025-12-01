@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, X, Move, Type, Settings2, GripVertical, Edit3 } from 'lucide-react';
+import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, X, Move, Type, Settings2, GripVertical, Edit3, Bold, Italic, Plus, Minus } from 'lucide-react';
 import { CardContent, CardStyle, UserInfo, UserInfoPosition } from '../types';
 import CardRenderer from './CardRenderer';
 
@@ -22,6 +22,78 @@ interface ExportTask {
   }>;
 }
 
+// Floating Toolbar Component
+const FloatingToolbar = ({ activeElement }: { activeElement: HTMLElement | null }) => {
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (!activeElement || !toolbarRef.current) return;
+
+    const updatePosition = () => {
+      const rect = activeElement.getBoundingClientRect();
+      const toolbarRect = toolbarRef.current!.getBoundingClientRect();
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+
+      let top = rect.top + scrollY - toolbarRect.height - 8;
+      let left = rect.left + scrollX + (rect.width / 2) - (toolbarRect.width / 2);
+
+      if (top < scrollY + 10) top = rect.bottom + scrollY + 8;
+      if (left < 10) left = 10;
+
+      setStyle({ top: `${top}px`, left: `${left}px` });
+    };
+
+    updatePosition();
+    // Optional: Add resize listener if needed, but element usually doesn't move autonomously
+  }, [activeElement]);
+
+  if (!activeElement) return null;
+
+  const handleCommand = (e: React.MouseEvent, command: string, value?: string) => {
+    e.preventDefault(); // Prevent focus loss
+    document.execCommand(command, false, value);
+  };
+
+  const changeFontSize = (e: React.MouseEvent, delta: number) => {
+    e.preventDefault();
+    if (!activeElement) return;
+    
+    const currentSizeStr = window.getComputedStyle(activeElement).fontSize;
+    const currentSize = parseFloat(currentSizeStr);
+    let newSize = currentSize + delta;
+    if (newSize < 12) newSize = 12;
+    if (newSize > 120) newSize = 120;
+    
+    // Set directly on element style
+    activeElement.style.fontSize = `${newSize}px`;
+  };
+
+  return (
+    <div 
+      ref={toolbarRef} 
+      className={`floating-toolbar ${activeElement ? 'visible' : ''}`}
+      style={style}
+      onMouseDown={(e) => e.preventDefault()} // Prevent taking focus away from editable text
+    >
+      <button onClick={(e) => handleCommand(e, 'bold')} title="加粗">
+        <Bold size={14} strokeWidth={3} />
+      </button>
+      <button onClick={(e) => handleCommand(e, 'italic')} title="斜体">
+        <Italic size={14} />
+      </button>
+      <div className="separator"></div>
+      <button onClick={(e) => changeFontSize(e, 2)} title="加大字号">
+        <span className="text-xs font-bold">A+</span>
+      </button>
+      <button onClick={(e) => changeFontSize(e, -2)} title="减小字号">
+        <span className="text-xs font-bold">A-</span>
+      </button>
+    </div>
+  );
+};
+
 // --- Text Wrapping Helper for SVG ---
 const wrapText = (text: string, maxCharsPerLine: number) => {
   const words = text.split('');
@@ -41,7 +113,8 @@ const wrapText = (text: string, maxCharsPerLine: number) => {
 };
 
 // --- Manual SVG Generator ---
-// This ensures 100% native SVG elements for editability, bypassing html-to-image for SVG exports.
+// Note: This generator currently strips HTML tags from content for SVG export compatibility
+// since SVG <text> doesn't support complex HTML formatting directly without foreignObject.
 const generateEditableSvg = (
   content: CardContent, 
   style: CardStyle, 
@@ -52,6 +125,13 @@ const generateEditableSvg = (
   userInfo: UserInfo
 ): string => {
   
+  // Strip HTML tags for SVG text
+  const stripHtml = (html: string) => {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  };
+
   // Style Configuration Map
   const styleMap: Record<CardStyle, any> = {
     [CardStyle.MINIMALIST]: { bg: '#ffffff', text: '#111827', accent: '#e5e7eb', font: 'Inter, sans-serif' },
@@ -98,7 +178,7 @@ const generateEditableSvg = (
   
   if (isCover) {
     // Title
-    const titleLines = wrapText(content.title, 12);
+    const titleLines = wrapText(stripHtml(content.title), 12);
     const titleSvg = titleLines.map((line, i) => 
       `<tspan x="${padding}" dy="${i === 0 ? 0 : 70}">${line}</tspan>`
     ).join('');
@@ -106,7 +186,7 @@ const generateEditableSvg = (
     mainContent += `<text x="${padding}" y="${200}" font-family="${s.font}" font-size="60" font-weight="800" fill="${s.text}">${titleSvg}</text>`;
 
     // Summary
-    const summaryLines = wrapText(content.summary, 18);
+    const summaryLines = wrapText(stripHtml(content.summary), 18);
     mainContent += `<text x="${padding}" y="${450}" font-family="${s.font}" font-size="28" font-weight="400" fill="${s.text}" opacity="0.9">
       ${summaryLines.map((line, i) => `<tspan x="${padding}" dy="${i === 0 ? 0 : 40}">${line}</tspan>`).join('')}
     </text>`;
@@ -114,14 +194,14 @@ const generateEditableSvg = (
     // Key Points
     content.keyPoints.forEach((point, i) => {
        mainContent += `<circle cx="${padding + 10}" cy="${700 + (i * 50)}" r="6" fill="${s.accent}" />`;
-       mainContent += `<text x="${padding + 40}" y="${708 + (i * 50)}" font-family="${s.font}" font-size="24" fill="${s.text}">${point}</text>`;
+       mainContent += `<text x="${padding + 40}" y="${708 + (i * 50)}" font-family="${s.font}" font-size="24" fill="${s.text}">${stripHtml(point)}</text>`;
     });
   } else if (currentSection) {
     // Slide Number
     mainContent += `<text x="${width - padding}" y="120" font-family="${s.font}" font-size="100" font-weight="900" fill="${s.text}" opacity="0.1" text-anchor="end">${(sectionIndex + 1).toString().padStart(2, '0')}</text>`;
 
     // Section Title
-    const secTitleLines = wrapText(currentSection.title, 14);
+    const secTitleLines = wrapText(stripHtml(currentSection.title), 14);
     mainContent += `<text x="${width / 2}" y="250" font-family="${s.font}" font-size="48" font-weight="bold" fill="${s.text}" text-anchor="middle">
       ${secTitleLines.map((line, i) => `<tspan x="${width/2}" dy="${i === 0 ? 0 : 60}">${line}</tspan>`).join('')}
     </text>`;
@@ -130,7 +210,7 @@ const generateEditableSvg = (
     mainContent += `<line x1="${width/2 - 50}" y1="320" x2="${width/2 + 50}" y2="320" stroke="${s.accent}" stroke-width="4" />`;
 
     // Content Paragraph
-    const lines = wrapText(currentSection.content, 22);
+    const lines = wrapText(stripHtml(currentSection.content), 22);
     mainContent += `<text x="${width / 2}" y="400" font-family="${s.font}" font-size="30" fill="${s.text}" text-anchor="middle">
       ${lines.map((line, i) => `<tspan x="${width/2}" dy="${i === 0 ? 0 : 48}">${line}</tspan>`).join('')}
     </text>`;
@@ -150,7 +230,6 @@ const generateEditableSvg = (
      if (userInfo.position === 'custom') {
         ux = width * (userInfo.customPos.x / 100);
         uy = height * (userInfo.customPos.y / 100);
-        // HTML renderer puts top-left at customPos%. Let's match that.
         textX = ux + uSize + 15;
      } else {
         if (userInfo.position === 'top-left') { ux = margin; uy = margin; textX = ux + uSize + 15; }
@@ -159,7 +238,6 @@ const generateEditableSvg = (
         if (userInfo.position === 'bottom-right') { ux = width - margin - uSize; uy = height - margin - uSize; textAnchor = 'end'; textX = ux - 15; }
      }
 
-     // Determine text color for user info
      const isDarkBg = [CardStyle.CYBERPUNK, CardStyle.ELEGANT_LUXURY, CardStyle.MODERN_GRADIENT, CardStyle.GLASSMORPHISM].includes(style);
      const uTextColor = isDarkBg ? '#ffffff' : '#333333';
      const uStroke = isDarkBg ? `stroke="rgba(0,0,0,0.5)" stroke-width="0.5"` : '';
@@ -228,11 +306,12 @@ const SlidePreview: React.FC<{ content: CardContent; style: CardStyle; styleName
                 fixedAspectRatioClass="w-full h-full"
                 footerNote={`${currentIndex + 1}/${totalSlides}`}
                 userInfo={userInfo}
+                // No editing in small preview
              />
           </div>
-          <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
-             <button onClick={handlePrev} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm shadow-lg"><ChevronLeft size={20} /></button>
-             <button onClick={handleNext} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm shadow-lg"><ChevronRight size={20} /></button>
+          <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 pointer-events-none">
+             <button onClick={handlePrev} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm shadow-lg pointer-events-auto"><ChevronLeft size={20} /></button>
+             <button onClick={handleNext} className="bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm shadow-lg pointer-events-auto"><ChevronRight size={20} /></button>
           </div>
           <div className="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-md pointer-events-none z-50">
              {currentIndex + 1} / {totalSlides}
@@ -247,6 +326,7 @@ const SlidePreview: React.FC<{ content: CardContent; style: CardStyle; styleName
   );
 };
 
+// ... PositionEditor remains the same ...
 const PositionEditor: React.FC<{ 
   userInfo: UserInfo; 
   setUserInfo: React.Dispatch<React.SetStateAction<UserInfo>>; 
@@ -326,18 +406,15 @@ const PositionEditor: React.FC<{
          ref={containerRef}
          className="relative w-full aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-indigo-200 cursor-crosshair group"
        >
-          {/* Static Background Preview (Minimalist Style) */}
           <div className="absolute inset-0 pointer-events-none opacity-50 scale-[0.35] origin-top-left w-[285%] h-[285%]">
              <CardRenderer 
                content={content} 
                style={CardStyle.MINIMALIST} 
                renderMode="cover" 
-               // Disable internal user info to prevent double rendering
                userInfo={{...userInfo, enabled: false}} 
              />
           </div>
           
-          {/* Draggable Overlay */}
           <div 
              className={`absolute flex items-center gap-2 p-1 rounded border-2 z-50 transition-transform duration-75 select-none ${isDragging ? 'border-indigo-500 bg-white/80 scale-110 shadow-xl cursor-grabbing' : 'border-indigo-500/0 hover:border-indigo-500/50 cursor-grab bg-white/40 backdrop-blur-sm'}`}
              style={{ 
@@ -356,14 +433,6 @@ const PositionEditor: React.FC<{
                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500"><User size={16} /></div>
              )}
              <span className="text-[10px] font-bold text-gray-800 whitespace-nowrap">{userInfo.nickname}</span>
-             
-             {isDragging && (
-                <>
-                   {/* Guides */}
-                   <div className="fixed top-0 left-[-1000px] right-[-1000px] h-px bg-indigo-500 border-t border-dashed opacity-50 pointer-events-none"></div>
-                   <div className="fixed top-[-1000px] bottom-[-1000px] left-0 w-px bg-indigo-500 border-l border-dashed opacity-50 pointer-events-none"></div>
-                </>
-             )}
           </div>
        </div>
     </div>
@@ -378,9 +447,30 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
   const [viewMode, setViewMode] = useState<'total' | 'slides'>('total');
   const [isEditMode, setIsEditMode] = useState(false);
   
+  // State for WYSIWYG Editor Toolbar
+  const [activeEditorElement, setActiveEditorElement] = useState<HTMLElement | null>(null);
+
   const [exportState, setExportState] = useState<{ isActive: boolean; platform: Platform; pageConfig: ExportTask['pages'][0] | null; }>({ isActive: false, platform: 'XIAOHONGSHU', pageConfig: null });
 
+  // Clear active editor when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // If we are clicking inside a toolbar or an editable area, ignore
+      if ((e.target as HTMLElement).closest('.floating-toolbar') || (e.target as HTMLElement).closest('[data-editable]')) {
+        return;
+      }
+      setActiveEditorElement(null);
+    };
+    if (isEditMode) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isEditMode]);
+
   const handleDownloadSingle = async (format: 'png' | 'svg') => {
+    // ... export logic (same as before) ...
     if (viewMode === 'slides') {
        if (!confirm("即将下载长图，是否继续？")) return;
        setViewMode('total');
@@ -397,7 +487,6 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
 
       let dataUrl = '';
       if (format === 'svg') {
-         // Use manual generator for single SVG
          const svgString = generateEditableSvg(content, style, 'cover', 0, 750, 1000, userInfo);
          const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
          dataUrl = URL.createObjectURL(blob);
@@ -434,6 +523,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
   };
 
   const handleDownloadSeries = async (platform: Platform, method: 'zip' | 'individual', format: 'png' | 'svg') => {
+    // ... same logic as before ...
     setShowMenu(false);
     setIsDownloading('series');
     
@@ -454,11 +544,9 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
         const ext = format;
 
         if (format === 'svg') {
-           // Use the Native SVG Generator
            const svgString = generateEditableSvg(content, style, page.renderMode, page.sectionIndex, width, height, userInfo);
            fileContent = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
         } else {
-           // Use HTML-to-Image for PNG
            setExportState({ isActive: true, platform, pageConfig: page });
            await new Promise(resolve => setTimeout(resolve, 250)); // Wait for render
            if (hiddenExportRef.current) {
@@ -470,7 +558,6 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
            }
         }
 
-        // Handle Download
         if (method === 'individual') {
            const link = document.createElement('a');
            link.download = `card-${style.toLowerCase()}-${page.index}.${ext}`;
@@ -514,6 +601,8 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
 
   return (
     <div className="flex flex-col gap-3 group relative">
+      <FloatingToolbar activeElement={activeEditorElement} />
+      
       <div className="fixed left-[-9999px] top-[-9999px] overflow-hidden pointer-events-none z-0" ref={hiddenExportRef}>
         {exportState.isActive && exportState.pageConfig && (
           <div style={{ width: exportState.platform === 'XIAOHONGSHU' ? '750px' : '640px', height: exportState.platform === 'XIAOHONGSHU' ? '1000px' : '960px' }}>
@@ -526,10 +615,13 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
         <span className="text-xs font-mono text-gray-400 group-hover:text-gray-800 transition-colors">{styleName}</span>
         <div className="flex gap-2">
             <button 
-              onClick={() => setIsEditMode(!isEditMode)} 
+              onClick={() => {
+                setIsEditMode(!isEditMode);
+                setActiveEditorElement(null);
+              }} 
               className={`text-xs font-medium flex items-center gap-1 transition-colors ${isEditMode ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded' : 'text-gray-400 hover:text-indigo-600'}`}
             >
-               <Edit3 size={14} /> {isEditMode ? '完成' : '编辑'}
+               <Edit3 size={14} /> {isEditMode ? '完成编辑' : '编辑文本'}
             </button>
             <button onClick={() => setViewMode(prev => prev === 'total' ? 'slides' : 'total')} className="text-xs font-medium text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
                {viewMode === 'total' ? <Eye size={14} /> : <Grid size={14} />} {viewMode === 'total' ? '预览多图' : '预览长图'}
@@ -547,6 +639,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
                userInfo={userInfo} 
                isEditable={isEditMode}
                onContentChange={onContentChange}
+               onActiveElementChange={setActiveEditorElement}
              />
            </div>
         ) : (
@@ -597,6 +690,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
   );
 };
 
+// ... CardGrid implementation remains similar ...
 const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
   const styles = [
     { id: CardStyle.MINIMALIST, name: "极简白 (Minimalist)" },
@@ -619,7 +713,7 @@ const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
     scale: 1,
     opacity: 0.9
   });
-  const [showUserPanel, setShowUserPanel] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -641,7 +735,6 @@ const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
             <div className="flex items-center gap-2">
                <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><User size={20} /></div>
                <span className="font-bold text-gray-800">个人身份标识</span>
-               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">SVG Editable</span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" checked={userInfo.enabled} onChange={e => setUserInfo(p => ({ ...p, enabled: e.target.checked }))} className="sr-only peer" />
