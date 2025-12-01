@@ -190,9 +190,9 @@
             const now = new Date();
 
             const displayKeys = allKeys.filter(k => {
-                if (!filterActive) return true;
                 const isExpired = k.expires_at && new Date(k.expires_at) < now;
                 const isExhausted = k.max_uses !== -1 && k.used_count >= k.max_uses;
+                if (!filterActive) return true;
                 return k.is_active && !isExpired && !isExhausted;
             });
 

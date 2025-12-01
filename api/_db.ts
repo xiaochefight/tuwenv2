@@ -92,8 +92,6 @@ export async function createAccessKey(name: string, maxUses: number = -1, daysVa
 }
 
 export async function updateAccessKey(id: number, maxUses: number, expiresAt: string | null) {
-  // We do not allow changing the name to avoid complex duplicate checks during update for now, 
-  // or simple updates to limits/time.
   const result = await query(
     `UPDATE access_keys SET max_uses = $2, expires_at = $3 WHERE id = $1 RETURNING *`,
     [id, maxUses, expiresAt]
