@@ -1,9 +1,13 @@
+
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { toPng } from 'html-to-image';
 import JSZip from 'jszip';
-import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, X, Move, Type, Settings2, GripVertical, Edit3 } from 'lucide-react';
+import { Image, FileCode, Loader2, Layers, Smartphone, MessageCircle, ChevronDown, Grid, Eye, ChevronLeft, ChevronRight, Package, Images, User, Upload, Edit3, Type, Minus, Plus, Edit2, Move } from 'lucide-react';
 import { CardContent, CardStyle, UserInfo, UserInfoPosition } from '../types';
 import CardRenderer from './CardRenderer';
+import EditToolbar from './EditToolbar';
+import { useInlineEditor } from '../hooks/useInlineEditor';
+import { saveToLocalStorage } from '../utils/storage';
 
 interface CardGridProps {
   content: CardContent;
@@ -22,26 +26,8 @@ interface ExportTask {
   }>;
 }
 
-// --- Text Wrapping Helper for SVG ---
-const wrapText = (text: string, maxCharsPerLine: number) => {
-  const words = text.split('');
-  const lines = [];
-  let currentLine = '';
-
-  words.forEach((char) => {
-    if ((currentLine + char).length > maxCharsPerLine) {
-      lines.push(currentLine);
-      currentLine = char;
-    } else {
-      currentLine += char;
-    }
-  });
-  if (currentLine) lines.push(currentLine);
-  return lines;
-};
-
 // --- Manual SVG Generator ---
-// This ensures 100% native SVG elements for editability, bypassing html-to-image for SVG exports.
+// (Kept as is for export functionality)
 const generateEditableSvg = (
   content: CardContent, 
   style: CardStyle, 
@@ -52,7 +38,24 @@ const generateEditableSvg = (
   userInfo: UserInfo
 ): string => {
   
-  // Style Configuration Map
+  const wrapText = (text: string, maxCharsPerLine: number) => {
+    const cleanText = text.replace(/<[^>]*>/g, '');
+    const words = cleanText.split('');
+    const lines = [];
+    let currentLine = '';
+
+    words.forEach((char) => {
+      if ((currentLine + char).length > maxCharsPerLine) {
+        lines.push(currentLine);
+        currentLine = char;
+      } else {
+        currentLine += char;
+      }
+    });
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+
   const styleMap: Record<CardStyle, any> = {
     [CardStyle.MINIMALIST]: { bg: '#ffffff', text: '#111827', accent: '#e5e7eb', font: 'Inter, sans-serif' },
     [CardStyle.MODERN_GRADIENT]: { bg: 'url(#gradient-bg)', text: '#ffffff', accent: 'rgba(255,255,255,0.2)', font: 'Inter, sans-serif' },
@@ -64,12 +67,11 @@ const generateEditableSvg = (
     [CardStyle.NEWSPAPER]: { bg: '#F0EAD6', text: '#111827', accent: '#000000', font: 'Playfair Display, serif' },
   };
 
-  const s = styleMap[style];
+  const s = styleMap[style] || styleMap[CardStyle.MINIMALIST];
   const padding = 60;
   const isCover = renderMode === 'cover';
   const currentSection = !isCover && content.sections[sectionIndex] ? content.sections[sectionIndex] : null;
 
-  // Definitions (Gradients)
   const defs = `
     <defs>
       <linearGradient id="gradient-bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -87,17 +89,14 @@ const generateEditableSvg = (
     </defs>
   `;
 
-  // Background
   let bgElement = `<rect width="100%" height="100%" fill="${s.bg}" />`;
   if (style === CardStyle.NEO_BRUTALISM) {
     bgElement = `<rect width="100%" height="100%" fill="${s.bg}" /><rect x="0" y="0" width="100%" height="100%" fill="none" stroke="#000" stroke-width="12" />`;
   }
 
-  // Content Rendering
   let mainContent = '';
   
   if (isCover) {
-    // Title
     const titleLines = wrapText(content.title, 12);
     const titleSvg = titleLines.map((line, i) => 
       `<tspan x="${padding}" dy="${i === 0 ? 0 : 70}">${line}</tspan>`
@@ -105,38 +104,32 @@ const generateEditableSvg = (
     
     mainContent += `<text x="${padding}" y="${200}" font-family="${s.font}" font-size="60" font-weight="800" fill="${s.text}">${titleSvg}</text>`;
 
-    // Summary
     const summaryLines = wrapText(content.summary, 18);
     mainContent += `<text x="${padding}" y="${450}" font-family="${s.font}" font-size="28" font-weight="400" fill="${s.text}" opacity="0.9">
       ${summaryLines.map((line, i) => `<tspan x="${padding}" dy="${i === 0 ? 0 : 40}">${line}</tspan>`).join('')}
     </text>`;
 
-    // Key Points
     content.keyPoints.forEach((point, i) => {
        mainContent += `<circle cx="${padding + 10}" cy="${700 + (i * 50)}" r="6" fill="${s.accent}" />`;
-       mainContent += `<text x="${padding + 40}" y="${708 + (i * 50)}" font-family="${s.font}" font-size="24" fill="${s.text}">${point}</text>`;
+       const cleanPoint = point.replace(/<[^>]*>/g, '');
+       mainContent += `<text x="${padding + 40}" y="${708 + (i * 50)}" font-family="${s.font}" font-size="24" fill="${s.text}">${cleanPoint}</text>`;
     });
   } else if (currentSection) {
-    // Slide Number
     mainContent += `<text x="${width - padding}" y="120" font-family="${s.font}" font-size="100" font-weight="900" fill="${s.text}" opacity="0.1" text-anchor="end">${(sectionIndex + 1).toString().padStart(2, '0')}</text>`;
 
-    // Section Title
     const secTitleLines = wrapText(currentSection.title, 14);
     mainContent += `<text x="${width / 2}" y="250" font-family="${s.font}" font-size="48" font-weight="bold" fill="${s.text}" text-anchor="middle">
       ${secTitleLines.map((line, i) => `<tspan x="${width/2}" dy="${i === 0 ? 0 : 60}">${line}</tspan>`).join('')}
     </text>`;
     
-    // Separator
     mainContent += `<line x1="${width/2 - 50}" y1="320" x2="${width/2 + 50}" y2="320" stroke="${s.accent}" stroke-width="4" />`;
 
-    // Content Paragraph
     const lines = wrapText(currentSection.content, 22);
     mainContent += `<text x="${width / 2}" y="400" font-family="${s.font}" font-size="30" fill="${s.text}" text-anchor="middle">
       ${lines.map((line, i) => `<tspan x="${width/2}" dy="${i === 0 ? 0 : 48}">${line}</tspan>`).join('')}
     </text>`;
   }
 
-  // User Info Layer
   let userInfoLayer = '';
   if (userInfo.enabled && userInfo.avatar) {
      const uSize = 50 * userInfo.scale;
@@ -145,12 +138,10 @@ const generateEditableSvg = (
      let textAnchor = 'start';
      let textX = 0;
 
-     // Calculate Coords
      const margin = 30;
      if (userInfo.position === 'custom') {
         ux = width * (userInfo.customPos.x / 100);
         uy = height * (userInfo.customPos.y / 100);
-        // HTML renderer puts top-left at customPos%. Let's match that.
         textX = ux + uSize + 15;
      } else {
         if (userInfo.position === 'top-left') { ux = margin; uy = margin; textX = ux + uSize + 15; }
@@ -159,7 +150,6 @@ const generateEditableSvg = (
         if (userInfo.position === 'bottom-right') { ux = width - margin - uSize; uy = height - margin - uSize; textAnchor = 'end'; textX = ux - 15; }
      }
 
-     // Determine text color for user info
      const isDarkBg = [CardStyle.CYBERPUNK, CardStyle.ELEGANT_LUXURY, CardStyle.MODERN_GRADIENT, CardStyle.GLASSMORPHISM].includes(style);
      const uTextColor = isDarkBg ? '#ffffff' : '#333333';
      const uStroke = isDarkBg ? `stroke="rgba(0,0,0,0.5)" stroke-width="0.5"` : '';
@@ -326,24 +316,21 @@ const PositionEditor: React.FC<{
          ref={containerRef}
          className="relative w-full aspect-[3/4] bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-indigo-200 cursor-crosshair group"
        >
-          {/* Static Background Preview (Minimalist Style) */}
           <div className="absolute inset-0 pointer-events-none opacity-50 scale-[0.35] origin-top-left w-[285%] h-[285%]">
              <CardRenderer 
                content={content} 
                style={CardStyle.MINIMALIST} 
                renderMode="cover" 
-               // Disable internal user info to prevent double rendering
                userInfo={{...userInfo, enabled: false}} 
              />
           </div>
           
-          {/* Draggable Overlay */}
           <div 
              className={`absolute flex items-center gap-2 p-1 rounded border-2 z-50 transition-transform duration-75 select-none ${isDragging ? 'border-indigo-500 bg-white/80 scale-110 shadow-xl cursor-grabbing' : 'border-indigo-500/0 hover:border-indigo-500/50 cursor-grab bg-white/40 backdrop-blur-sm'}`}
              style={{ 
                left: `${userInfo.customPos.x}%`, 
                top: `${userInfo.customPos.y}%`,
-               transform: 'translate(0, 0)' // Origin handled by left/top
+               transform: 'translate(0, 0)'
              }}
              onMouseDown={handleMouseDown}
              onTouchStart={handleTouchStart}
@@ -356,14 +343,6 @@ const PositionEditor: React.FC<{
                 <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500"><User size={16} /></div>
              )}
              <span className="text-[10px] font-bold text-gray-800 whitespace-nowrap">{userInfo.nickname}</span>
-             
-             {isDragging && (
-                <>
-                   {/* Guides */}
-                   <div className="fixed top-0 left-[-1000px] right-[-1000px] h-px bg-indigo-500 border-t border-dashed opacity-50 pointer-events-none"></div>
-                   <div className="fixed top-[-1000px] bottom-[-1000px] left-0 w-px bg-indigo-500 border-l border-dashed opacity-50 pointer-events-none"></div>
-                </>
-             )}
           </div>
        </div>
     </div>
@@ -378,7 +357,43 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
   const [viewMode, setViewMode] = useState<'total' | 'slides'>('total');
   const [isEditMode, setIsEditMode] = useState(false);
   
-  const [exportState, setExportState] = useState<{ isActive: boolean; platform: Platform; pageConfig: ExportTask['pages'][0] | null; }>({ isActive: false, platform: 'XIAOHONGSHU', pageConfig: null });
+  // Use Editor Hook
+  const { activeElement, setActiveElement, toggleBold, setTextColor, setFontSize } = useInlineEditor();
+  
+  // Persistence Effect
+  useEffect(() => {
+    saveToLocalStorage('magic-card-content', content);
+  }, [content]);
+
+  // Handle outside clicks to close editor toolbar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // Ignore clicks inside the toolbar (EditToolbar handles its own logic, but we need to keep activeElement alive if clicking toolbar)
+      // The Toolbar is a portal or fixed element usually, but here checking class
+      if ((e.target as HTMLElement).closest('.fixed.z-\\[9999\\]')) return;
+      
+      // If click is outside the active element
+      if (activeElement && !activeElement.contains(e.target as Node)) {
+        setActiveElement(null);
+      }
+    };
+    if (activeElement) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeElement, setActiveElement]);
+
+  const handleActiveElementChange = (element: HTMLElement | null) => {
+    if (isEditMode) {
+      setActiveElement(element);
+    }
+  };
+  
+  useEffect(() => {
+    if (!isEditMode) setActiveElement(null);
+  }, [isEditMode, setActiveElement]);
 
   const handleDownloadSingle = async (format: 'png' | 'svg') => {
     if (viewMode === 'slides') {
@@ -397,7 +412,6 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
 
       let dataUrl = '';
       if (format === 'svg') {
-         // Use manual generator for single SVG
          const svgString = generateEditableSvg(content, style, 'cover', 0, 750, 1000, userInfo);
          const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
          dataUrl = URL.createObjectURL(blob);
@@ -433,6 +447,8 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
     return { platform, pages };
   };
 
+  const [exportState, setExportState] = useState<{ isActive: boolean; platform: Platform; pageConfig: ExportTask['pages'][0] | null; }>({ isActive: false, platform: 'XIAOHONGSHU', pageConfig: null });
+
   const handleDownloadSeries = async (platform: Platform, method: 'zip' | 'individual', format: 'png' | 'svg') => {
     setShowMenu(false);
     setIsDownloading('series');
@@ -454,13 +470,11 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
         const ext = format;
 
         if (format === 'svg') {
-           // Use the Native SVG Generator
            const svgString = generateEditableSvg(content, style, page.renderMode, page.sectionIndex, width, height, userInfo);
            fileContent = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
         } else {
-           // Use HTML-to-Image for PNG
            setExportState({ isActive: true, platform, pageConfig: page });
-           await new Promise(resolve => setTimeout(resolve, 250)); // Wait for render
+           await new Promise(resolve => setTimeout(resolve, 250));
            if (hiddenExportRef.current) {
              const node = hiddenExportRef.current.firstElementChild as HTMLElement;
              if (node) {
@@ -470,7 +484,6 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
            }
         }
 
-        // Handle Download
         if (method === 'individual') {
            const link = document.createElement('a');
            link.download = `card-${style.toLowerCase()}-${page.index}.${ext}`;
@@ -521,6 +534,17 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
           </div>
         )}
       </div>
+      
+      {/* New Floating Toolbar */}
+      {isEditMode && activeElement && (
+        <EditToolbar 
+          activeElement={activeElement} 
+          onClose={() => setActiveElement(null)} 
+          onToggleBold={toggleBold}
+          onSetColor={setTextColor}
+          onSetFontSize={setFontSize}
+        />
+      )}
 
       <div className="flex justify-between items-center px-1">
         <span className="text-xs font-mono text-gray-400 group-hover:text-gray-800 transition-colors">{styleName}</span>
@@ -529,7 +553,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
               onClick={() => setIsEditMode(!isEditMode)} 
               className={`text-xs font-medium flex items-center gap-1 transition-colors ${isEditMode ? 'text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded' : 'text-gray-400 hover:text-indigo-600'}`}
             >
-               <Edit3 size={14} /> {isEditMode ? '完成' : '编辑'}
+               <Edit3 size={14} /> {isEditMode ? '完成' : '编辑文本'}
             </button>
             <button onClick={() => setViewMode(prev => prev === 'total' ? 'slides' : 'total')} className="text-xs font-medium text-gray-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
                {viewMode === 'total' ? <Eye size={14} /> : <Grid size={14} />} {viewMode === 'total' ? '预览多图' : '预览长图'}
@@ -547,6 +571,7 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
                userInfo={userInfo} 
                isEditable={isEditMode}
                onContentChange={onContentChange}
+               onActiveElementChange={handleActiveElementChange}
              />
            </div>
         ) : (
@@ -598,29 +623,15 @@ const CardWrapper: React.FC<{ content: CardContent; style: CardStyle; styleName:
 };
 
 const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
-  const styles = [
-    { id: CardStyle.MINIMALIST, name: "极简白 (Minimalist)" },
-    { id: CardStyle.MODERN_GRADIENT, name: "现代渐变 (Gradient)" },
-    { id: CardStyle.CYBERPUNK, name: "赛博朋克 (Cyberpunk)" },
-    { id: CardStyle.NEO_BRUTALISM, name: "新丑主义 (Neo-Brutalism)" },
-    { id: CardStyle.ELEGANT_LUXURY, name: "奢华暗金 (Luxury)" },
-    { id: CardStyle.NATURE_ORGANIC, name: "自然森系 (Organic)" },
-    { id: CardStyle.GLASSMORPHISM, name: "磨砂玻璃 (Glass)" },
-    { id: CardStyle.NEWSPAPER, name: "复古报纸 (Newspaper)" },
-  ];
-
-  // User Info State
   const [userInfo, setUserInfo] = useState<UserInfo>({
-    enabled: false,
+    enabled: true,
     avatar: null,
-    nickname: 'User Name',
+    nickname: "AI 探索者",
     position: 'bottom-left',
-    customPos: { x: 10, y: 85 }, // Default custom position
+    customPos: { x: 5, y: 90 },
     scale: 1,
-    opacity: 0.9
+    opacity: 0.8
   });
-  const [showUserPanel, setShowUserPanel] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -633,95 +644,153 @@ const CardGrid: React.FC<CardGridProps> = ({ content, onContentChange }) => {
     }
   };
 
+  const styles = [
+    { id: CardStyle.MINIMALIST, name: '极简白 (Minimalist)' },
+    { id: CardStyle.MODERN_GRADIENT, name: '现代渐变 (Gradient)' },
+    { id: CardStyle.CYBERPUNK, name: '赛博朋克 (Cyberpunk)' },
+    { id: CardStyle.NEO_BRUTALISM, name: '新丑主义 (Neo-Brutalism)' },
+    { id: CardStyle.ELEGANT_LUXURY, name: '奢华黑金 (Luxury)' },
+    { id: CardStyle.NATURE_ORGANIC, name: '自然森系 (Organic)' },
+    { id: CardStyle.GLASSMORPHISM, name: '磨砂玻璃 (Glass)' },
+    { id: CardStyle.NEWSPAPER, name: '复古报纸 (Newspaper)' },
+  ];
+
   return (
     <div className="container mx-auto px-4 pb-20">
-      {/* User Info Control Panel */}
-      <div className="mb-8 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-         <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-               <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><User size={20} /></div>
-               <span className="font-bold text-gray-800">个人身份标识</span>
-               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">SVG Editable</span>
-            </div>
+      
+      {/* User Info Settings Panel */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8 transition-all hover:shadow-md">
+         <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <User size={20} className="text-indigo-600" />
+              个人信息设置
+            </h3>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" checked={userInfo.enabled} onChange={e => setUserInfo(p => ({ ...p, enabled: e.target.checked }))} className="sr-only peer" />
+              <input type="checkbox" checked={userInfo.enabled} onChange={e => setUserInfo({...userInfo, enabled: e.target.checked})} className="sr-only peer" />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              <span className="ml-3 text-sm font-medium text-gray-700">{userInfo.enabled ? '已启用' : '已隐藏'}</span>
             </label>
          </div>
 
          {userInfo.enabled && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-top-4 duration-300">
+              {/* Left: Basic Info */}
               <div className="space-y-4">
-                 <div className="flex items-center gap-4">
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-16 h-16 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 hover:border-indigo-500 cursor-pointer flex items-center justify-center overflow-hidden group transition-colors"
-                    >
-                       {userInfo.avatar ? <img src={userInfo.avatar} className="w-full h-full object-cover" /> : <Upload size={20} className="text-gray-400 group-hover:text-indigo-500" />}
-                    </div>
-                    <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" accept="image/png, image/jpeg" />
-                    <div className="flex-1">
-                       <label className="text-xs font-bold text-gray-500 mb-1 block">昵称</label>
-                       <input 
-                         type="text" 
-                         value={userInfo.nickname} 
-                         onChange={e => setUserInfo(p => ({ ...p, nickname: e.target.value.slice(0, 12) }))}
-                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                         placeholder="输入昵称"
-                       />
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">头像</label>
+                    <div className="flex items-center gap-4">
+                       <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-gray-200 overflow-hidden flex-shrink-0 relative group">
+                          {userInfo.avatar ? (
+                            <img src={userInfo.avatar} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-8 h-8 text-gray-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                          )}
+                          <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
+                             <Upload size={16} />
+                             <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                          </label>
+                       </div>
+                       <div className="flex-1">
+                          <label className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 cursor-pointer transition-colors inline-flex items-center gap-2 shadow-sm">
+                             <Upload size={14} /> 上传头像
+                             <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                          </label>
+                          <p className="text-xs text-gray-400 mt-2">建议正方形图片 (JPG/PNG)</p>
+                       </div>
                     </div>
                  </div>
 
-                 {userInfo.position === 'custom' && (
-                    <PositionEditor userInfo={userInfo} setUserInfo={setUserInfo} content={content} />
-                 )}
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">昵称</label>
+                    <input 
+                      type="text" 
+                      value={userInfo.nickname} 
+                      onChange={(e) => setUserInfo({...userInfo, nickname: e.target.value})}
+                      className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                      placeholder="输入昵称..."
+                    />
+                 </div>
               </div>
 
+              {/* Middle: Position & Style */}
               <div className="space-y-4">
                  <div>
-                    <label className="text-xs font-bold text-gray-500 mb-2 block flex items-center gap-1"><Move size={12} /> 位置布局</label>
-                    <div className="grid grid-cols-3 gap-2">
-                       {(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as UserInfoPosition[]).map(pos => (
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">位置布局</label>
+                    <div className="grid grid-cols-2 gap-2">
+                       {(['bottom-left', 'bottom-right', 'top-left', 'top-right'] as UserInfoPosition[]).map(pos => (
                           <button 
                             key={pos}
-                            onClick={() => setUserInfo(p => ({ ...p, position: pos }))}
-                            className={`px-3 py-2 text-xs rounded border transition-all ${userInfo.position === pos ? 'bg-indigo-50 border-indigo-500 text-indigo-700 font-bold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            onClick={() => setUserInfo({...userInfo, position: pos})}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${userInfo.position === pos ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                           >
-                             {pos.replace('-', ' ')}
+                             {pos === 'bottom-left' && '↙ 左下角'}
+                             {pos === 'bottom-right' && '↘ 右下角'}
+                             {pos === 'top-left' && '↖ 左上角'}
+                             {pos === 'top-right' && '↗ 右上角'}
                           </button>
                        ))}
                        <button 
-                          onClick={() => setUserInfo(p => ({ ...p, position: 'custom' }))}
-                          className={`px-3 py-2 text-xs rounded border transition-all col-span-2 ${userInfo.position === 'custom' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 font-bold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                       >
-                          自定义位置
-                       </button>
+                            onClick={() => setUserInfo({...userInfo, position: 'custom'})}
+                            className={`col-span-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${userInfo.position === 'custom' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                          >
+                             <Move size={12} className="inline mr-1" /> 自定义位置 (拖拽)
+                          </button>
                     </div>
                  </div>
-                 
-                 <div className="flex gap-4">
-                    <div className="flex-1">
-                       <label className="text-xs font-bold text-gray-500 mb-1 block">大小 ({Math.round(userInfo.scale * 100)}%)</label>
-                       <input type="range" min="0.8" max="1.5" step="0.1" value={userInfo.scale} onChange={e => setUserInfo(p => ({ ...p, scale: parseFloat(e.target.value) }))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">大小: {Math.round(userInfo.scale * 100)}%</label>
+                      <input 
+                        type="range" 
+                        min="0.5" 
+                        max="1.5" 
+                        step="0.1" 
+                        value={userInfo.scale} 
+                        onChange={(e) => setUserInfo({...userInfo, scale: parseFloat(e.target.value)})}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
                     </div>
-                    <div className="flex-1">
-                       <label className="text-xs font-bold text-gray-500 mb-1 block">透明度 ({Math.round(userInfo.opacity * 100)}%)</label>
-                       <input type="range" min="0.5" max="1" step="0.1" value={userInfo.opacity} onChange={e => setUserInfo(p => ({ ...p, opacity: parseFloat(e.target.value) }))} className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">透明度: {Math.round(userInfo.opacity * 100)}%</label>
+                      <input 
+                        type="range" 
+                        min="0.2" 
+                        max="1.0" 
+                        step="0.1" 
+                        value={userInfo.opacity} 
+                        onChange={(e) => setUserInfo({...userInfo, opacity: parseFloat(e.target.value)})}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
                     </div>
                  </div>
+              </div>
+
+              {/* Right: Custom Position Editor */}
+              <div>
+                 {userInfo.position === 'custom' ? (
+                   <PositionEditor userInfo={userInfo} setUserInfo={setUserInfo} content={content} />
+                 ) : (
+                   <div className="h-full bg-gray-50 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-6 text-center">
+                      <Move size={32} className="mb-2 opacity-50" />
+                      <p className="text-xs">选择"自定义位置"以开启<br/>可视化拖拽调整</p>
+                   </div>
+                 )}
               </div>
            </div>
          )}
       </div>
 
-      <div className="flex items-center gap-4 mb-8">
-        <div className="h-px flex-1 bg-slate-200"></div>
-        <span className="text-slate-400 font-medium text-sm uppercase tracking-widest">选择一种风格并下载</span>
-        <div className="h-px flex-1 bg-slate-200"></div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {styles.map((style) => (
-          <CardWrapper key={style.id} content={content} style={style.id} styleName={style.name} userInfo={userInfo} onContentChange={onContentChange} />
+          <CardWrapper 
+            key={style.id} 
+            content={content} 
+            style={style.id} 
+            styleName={style.name} 
+            userInfo={userInfo}
+            onContentChange={onContentChange}
+          />
         ))}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Wand2, Eraser, AlignLeft, Settings, X, Key, Save } from 'lucide-react';
+import { Sparkles, Wand2, Eraser, AlignLeft } from 'lucide-react';
 import { generateCardContent } from './services/geminiService';
 import { CardContent, GenerationState } from './types';
 import CardGrid from './components/CardGrid';
@@ -13,25 +13,8 @@ const App: React.FC = () => {
     error: null,
     hasResult: false,
   });
-  
-  // Access Key Management (formerly API Key)
-  const [accessKey, setAccessKey] = useState<string>('');
-  const [showSettings, setShowSettings] = useState<boolean>(false);
 
   const resultsRef = useRef<HTMLDivElement>(null);
-
-  // Load Key from local storage on mount
-  useEffect(() => {
-    const storedKey = localStorage.getItem('magic_card_access_key');
-    if (storedKey) {
-      setAccessKey(storedKey);
-    }
-  }, []);
-
-  const handleSaveKey = () => {
-    localStorage.setItem('magic_card_access_key', accessKey);
-    setShowSettings(false);
-  };
 
   const handleGenerate = async () => {
     if (!inputText.trim()) return;
@@ -39,20 +22,16 @@ const App: React.FC = () => {
     setState({ isLoading: true, error: null, hasResult: false });
     
     try {
-      const result = await generateCardContent(inputText, accessKey);
+      const result = await generateCardContent(inputText);
       setCardContent(result);
       setState({ isLoading: false, error: null, hasResult: true });
     } catch (e: any) {
-      const errorMessage = e?.message || "生成失败。请检查您的密钥或重试。";
+      const errorMessage = e?.message || "生成失败，请重试。";
       setState({ 
         isLoading: false, 
         error: errorMessage, 
         hasResult: false 
       });
-      // If error might be related to auth
-      if (errorMessage.includes("Key") || errorMessage.includes("401") || errorMessage.includes("403")) {
-        setShowSettings(true);
-      }
     }
   };
 
@@ -76,69 +55,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 relative">
       
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative animate-in zoom-in-95 duration-200">
-            <button 
-              onClick={() => setShowSettings(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <X size={20} />
-            </button>
-            
-            <div className="flex items-center gap-2 mb-6 text-indigo-600">
-              <Settings size={24} />
-              <h2 className="text-xl font-bold">设置</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                  <Key size={16} />
-                  访问密钥 (Access Key)
-                </label>
-                <input 
-                  type="password" 
-                  value={accessKey}
-                  onChange={(e) => setAccessKey(e.target.value)}
-                  placeholder="ak_..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 bg-slate-50 text-slate-800"
-                />
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  请输入管理员分配的访问密钥以使用服务。
-                  <br/>
-                  密钥存储在本地浏览器中。
-                </p>
-              </div>
-              
-              <button 
-                onClick={handleSaveKey}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-              >
-                <Save size={18} />
-                保存设置
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hero Section */}
       <header className="relative bg-white border-b border-slate-200 pt-16 pb-12 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-50"></div>
         
-        {/* Settings Button */}
-        <div className="absolute top-4 right-4 z-20">
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
-          >
-            <Settings size={16} />
-            <span className="hidden sm:inline">{accessKey ? '密钥已设置' : '配置密钥'}</span>
-          </button>
-        </div>
-
         <div className="container mx-auto px-4 text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold uppercase tracking-wider mb-6 border border-indigo-100">
             <Sparkles size={14} />
@@ -210,11 +130,6 @@ const App: React.FC = () => {
         {state.error && (
           <div className="max-w-3xl mx-auto mt-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-lg text-center text-sm flex flex-col items-center gap-2">
             <span>{state.error}</span>
-            {(state.error.includes("密钥") || state.error.includes("Key")) && (
-              <button onClick={() => setShowSettings(true)} className="text-indigo-600 hover:underline font-bold">
-                点击此处配置访问密钥
-              </button>
-            )}
           </div>
         )}
       </main>
